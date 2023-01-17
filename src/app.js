@@ -24,7 +24,22 @@ try {
 }
 
 app.post("/cadastro", (req, res) => {
+    const user = req.body
+    const validateUser= registerUserSchema.validate(user, {abortEarly:false})
+   
 
+    if (validateUser.error) {
+        const erros = validateUser.error.details.map((err) => {
+            if(err.message ==='"confirmPassword" must be [ref:password]' ) {
+                err.message = "confirmPassword tem que ser igual ao password"
+            }
+            
+            return err.message
+        })
+        return res.status(422).send(erros)
+    }
+    db.collection("user").insertOne({user})
+    res.status(201).send("Usuário criado com sucesso")
   
 }) 
 
