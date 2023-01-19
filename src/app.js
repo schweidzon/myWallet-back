@@ -3,9 +3,10 @@ import cors from 'cors'
 import joi from 'joi'
 import { MongoClient, ObjectId } from 'mongodb'
 import dotenv from 'dotenv'
-import { registerUserSchema } from '../validators.js'
+import { entriesSchema, loginSchema, registerUserSchema } from '../validators.js'
 import dayjs from 'dayjs'
 import bcrypt from 'bcrypt'
+import { v4 as uuidV4 } from 'uuid'
 dotenv.config()
 
 const app = express()
@@ -27,8 +28,6 @@ try {
 
 app.post("/cadastro", async (req, res) => {
     const user = req.body
-    console.log(user)
-    const validateUser = registerUserSchema.validate(user, { abortEarly: false })
 
     const encryptPassword = bcrypt.hashSync(user.password, 10)
 
@@ -36,6 +35,7 @@ app.post("/cadastro", async (req, res) => {
     console.log(checkUserExist)
     if (checkUserExist) return res.status(409).send("Usuário já cadastrado!")
 
+    const validateUser = registerUserSchema.validate(user, { abortEarly: false })
 
     if (validateUser.error) {
         const erros = validateUser.error.details.map((err) => {
@@ -50,38 +50,94 @@ app.post("/cadastro", async (req, res) => {
         })
         return res.status(422).send(erros)
     }
-    await db.collection("users").insertOne({...req.body, password:encryptPassword,wallet: []})
+    await db.collection("users").insertOne({ ...req.body, password: encryptPassword })
     res.status(201).send("Usuário cadastrado com sucesso")
 
 })
 
 app.post("/", async (req, res) => {
     const user = req.body
-    console.log(user.email)
-    console.log(user.password)
-    //console.log( await db.collection("users").find().toArray())
-    const userExist = await db.collection("users").findOne({ email: user.email })
 
-    if (!userExist) return res.status(400).send("Usuário ou senha incorretos")
+    const validateUser = loginSchema.validate(user, {abortEarly:false})
 
-    const matchPassword = bcrypt.compareSync(user.password, userExist.password )
+    if(validateUser.error) {
+        const erros = validaValue.error.details.map((err) => {
+            return err.message
+        })
+        return res.status(422).send(erros)
+    }
 
-    if(!matchPassword) return res.status(400).send("Usuário ou senha incorretos")
+    try {
+        const userExist = await db.collection("users").findOne({ email: user.email })
+        console.log(userExist)
 
-    return res.send(userExist)
+        if (!userExist) return res.status(400).send("Usuário ou senha incorretos")
+    
+        const matchPassword = bcrypt.compareSync(user.password, userExist.password)
+    
+        if (!matchPassword) return res.status(400).send("Usuário ou senha incorretos")
+    
+        const token = uuidV4()
+    
+        await db.collection("sessions").insertOne({ idUser: userExist._id, token, user: userExist.name })
+        const resp = await db.collection("sessions").findOne({token})
+        return res.send(resp)
+        
+    } catch (error) {
+        console.log(error.message)
+        return res.sendStatus(500)
+    }
+
+   
 })
 
-app.get("/values", async(req, res) => {   
-    const user = req.headers.user  
-    const userExist = await db.collection("users").findOne({name:user})   
-    return res.send(userExist)
+app.get("/values", async (req, res) => {
+
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "")
+    if (!token) return res.status(422).send("Informe o token!")
+    try {
+        const checkSession = await db.collection("sessions").findOne({ token })
+        console.log(checkSession)
+        if (!checkSession) return res.status(401).send("Você precisa estar logado para ver a carteira")
+        const userWallet = await db.collection("wallet").find({ userId: ObjectId(checkSession.idUser) }).toArray()
+        // db.wallet.find({ userId: ObjectId(checkSession._id) })       
+        return res.send(userWallet)
+    } catch (error) {
+        return res.sendStatus(500)
+    }
+
 })
 
 app.post("/update-wallet", async (req, res) => {
     const newValue = req.body
-    await db.collection("users").updateOne({name: newValue.user}, {$push: { wallet: {value: newValue.value, description: newValue.description, type: newValue.type, date: dayjs().format("DD/MM") }}})
-    //console.log( await db.collection("users").findOne({name: newValue.user}) )
-    return res.send("ok")
+    const { authorization } = req.headers
+    const validaValue = entriesSchema.validate(newValue, { abortEarly: false })
+
+    if (validaValue.error) {
+        const erros = validaValue.error.details.map((err) => {
+            return err.message
+        })
+        return res.status(422).send(erros)
+    }
+
+    const token = authorization?.replace("Bearer ", "")
+    if (!token) return res.status(422).send("Informe o token!")
+
+    try {
+        const checkSession = await db.collection("sessions").findOne({ token })
+        if (!checkSession) return res.status(401).send("Você não tem autorização para cadastrar um novo valor na carteira")
+        console.log(checkSession)
+        console.log(checkSession.idUser)
+        await db.collection("wallet").insertOne({ value: newValue.value, description: newValue.description, type: newValue.type, date: dayjs().format("DD/MM"), userId: checkSession.idUser })
+        // await db.collection("users").updateOne({ name: newValue.user }, { $push: { wallet: { value: newValue.value, description: newValue.description, type: newValue.type, date: dayjs().format("DD/MM"), id: checkSession._id } } })
+        //console.log( await db.collection("users").findOne({name: newValue.user}) )
+        return res.send("ok")
+
+    } catch (error) {
+        return res.sendStatus(500)
+    }
+
 })
 
 
