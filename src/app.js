@@ -140,6 +140,26 @@ app.post("/update-wallet", async (req, res) => {
 
 })
 
+ app.delete("/update-wallet/?:id", async (req, res) => {
+    const {id} = req.params
+    const {authorization} = req.headers
+    if(!authorization) return res.status(404).send("Você não tem autorização para deletar uma mensagem")
+    const token = authorization.replace("Bearer ", "")
+    if(!token) return res.status(422).send("Informe o token!")
+    try {
+        const checkUser = await db.collection("sessions").findOne({token})
+        if(!checkUser) return res.status(401).send("Você não tem autorização para deletar uma mensagem")
+        console.log(id)
+        await db.collection("wallet").deleteOne({_id: ObjectId(id)})
+        return res.sendStatus(202)
+        
+    } catch (error) {
+        console.log(error)
+        return res.sendStatus(500)
+    }
+  
+ })
+
 
 
 const PORT = 5000
