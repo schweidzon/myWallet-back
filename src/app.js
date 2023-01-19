@@ -3,7 +3,7 @@ import cors from 'cors'
 import joi from 'joi'
 import { MongoClient, ObjectId } from 'mongodb'
 import dotenv from 'dotenv'
-import { entriesSchema, loginSchema, registerUserSchema } from '../validators.js'
+import { editSchema, entriesSchema, loginSchema, registerUserSchema } from '../validators.js'
 import dayjs from 'dayjs'
 import bcrypt from 'bcrypt'
 import { v4 as uuidV4 } from 'uuid'
@@ -50,7 +50,7 @@ app.post("/cadastro", async (req, res) => {
         })
         return res.status(422).send(erros)
     }
-    await db.collection("users").insertOne({ ...req.body, password: encryptPassword })
+    await db.collection("users").insertOne({ ...req.body, password: encryptPassword, confirmPassword: encryptPassword })
     res.status(201).send("Usuário cadastrado com sucesso")
 
 })
@@ -58,9 +58,9 @@ app.post("/cadastro", async (req, res) => {
 app.post("/", async (req, res) => {
     const user = req.body
 
-    const validateUser = loginSchema.validate(user, {abortEarly:false})
+    const validateUser = loginSchema.validate(user, { abortEarly: false })
 
-    if(validateUser.error) {
+    if (validateUser.error) {
         const erros = validaValue.error.details.map((err) => {
             return err.message
         })
@@ -72,23 +72,23 @@ app.post("/", async (req, res) => {
         console.log(userExist)
 
         if (!userExist) return res.status(400).send("Usuário ou senha incorretos")
-    
+
         const matchPassword = bcrypt.compareSync(user.password, userExist.password)
-    
+
         if (!matchPassword) return res.status(400).send("Usuário ou senha incorretos")
-    
+
         const token = uuidV4()
-    
+
         await db.collection("sessions").insertOne({ idUser: userExist._id, token, user: userExist.name })
-        const resp = await db.collection("sessions").findOne({token})
+        const resp = await db.collection("sessions").findOne({ token })
         return res.send(resp)
-        
+
     } catch (error) {
         console.log(error.message)
         return res.sendStatus(500)
     }
 
-   
+
 })
 
 app.get("/values", async (req, res) => {
@@ -140,25 +140,61 @@ app.post("/update-wallet", async (req, res) => {
 
 })
 
- app.delete("/update-wallet/?:id", async (req, res) => {
-    const {id} = req.params
-    const {authorization} = req.headers
-    if(!authorization) return res.status(404).send("Você não tem autorização para deletar uma mensagem")
+app.delete("/update-wallet/?:id", async (req, res) => {
+    const { id } = req.params
+    const { authorization } = req.headers
+    if (!authorization) return res.status(404).send("Você não tem autorização para deletar uma mensagem")
     const token = authorization.replace("Bearer ", "")
-    if(!token) return res.status(422).send("Informe o token!")
+    if (!token) return res.status(422).send("Informe o token!")
     try {
-        const checkUser = await db.collection("sessions").findOne({token})
-        if(!checkUser) return res.status(401).send("Você não tem autorização para deletar uma mensagem")
+        const checkUser = await db.collection("sessions").findOne({ token })
+        if (!checkUser) return res.status(401).send("Você não tem autorização para deletar uma mensagem")
         console.log(id)
-        await db.collection("wallet").deleteOne({_id: ObjectId(id)})
+        await db.collection("wallet").deleteOne({ _id: ObjectId(id) })
         return res.sendStatus(202)
-        
+
     } catch (error) {
         console.log(error)
         return res.sendStatus(500)
     }
-  
- })
+
+})
+
+app.put("/update-wallet/?:id", async (req, res) => {
+    const { id } = req.params
+    const { value, description } = req.body
+    const valueToUpdate = await db.collection("wallet").findOne({_id: ObjectId(id)})
+    if(!value) return res.send({...valueToUpdate})
+    const { authorization } = req.headers
+
+    const validaValue = editSchema.validate({...req.body}, { abortEarly: false })
+
+    if (validaValue.error) {
+        const erros = validaValue.error.details.map((err) => {
+            return err.message
+        })
+        return res.status(422).send(erros)
+    }
+    
+    if (!authorization) return res.status(404).send("Você não tem autorização para editar uma mensagem")
+    const token = authorization.replace("Bearer ", "")
+    if (!token) return res.status(422).send("Informe o token!")
+
+    try {
+        const checkUser = await db.collection("sessions").findOne({ token })
+        if (!checkUser) return res.status(401).send("Você não tem autorização para editar uma mensagem")
+      
+        
+        await db.collection("wallet").updateOne({ _id: ObjectId(id) }, { $set: { value, description } })
+        return res.status(204).send("Atualizado com sucesso!")
+
+    } catch (error) {
+        return res.sendStatus(500)
+
+    }
+
+
+})
 
 
 
