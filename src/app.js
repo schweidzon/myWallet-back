@@ -12,5 +12,5 @@ app.use([authRouter, walletRouter])
 const PORT = 5000
 
 app.listen(PORT, () => {
-    console.log("Server onn running on port: 5000")
+    console.log(`Server onn running on port: ${PORT}`)
 })
