@@ -1,6 +1,5 @@
 import bcrypt from 'bcrypt'
 import { v4 as uuidV4 } from 'uuid'
-import { loginSchema, registerUserSchema } from '../schemas/authSchemas.js'
 import db from '../config/database.js'
 
 
@@ -12,7 +11,7 @@ export async function signUp(req, res) {
 
         const checkUserExist = await db.collection("users").findOne({ email: user.email })
         console.log(checkUserExist)
-        if (checkUserExist) return res.status(409).send("Usuário já cadastrado!")
+        if (checkUserExist) return res.status(409).send("Email já cadastrado!")
         await db.collection("users").insertOne({ name: user.name, email: user.email, password: encryptPassword })
         res.status(201).send("Usuário cadastrado com sucesso")
 

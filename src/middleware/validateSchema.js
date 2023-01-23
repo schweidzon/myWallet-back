@@ -7,7 +7,7 @@ export function validateSchema(schema) {
                 if (err.message === '"confirmPassword" must be [ref:password]') {
                     err.message = "confirmPassword tem que ser igual ao password"
                 }
-                if (err.message.includes("/^[A-Za-záàâãéèêíïóôõöúçñÁÀÂÃÉÈÍÏÓÔÕÖÚÇÑ]+$/")) {
+                if (err.message.includes("/^[A-Za-záàâãéèêíïóôõöúçñÁÀÂÃÉÈÍÏÓÔÕÖÚÇÑ ]+$/")) {
                     err.message = "Nome de usuário deve ter somente letras"
                 }
 
